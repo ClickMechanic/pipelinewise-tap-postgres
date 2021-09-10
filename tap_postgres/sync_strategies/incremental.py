@@ -80,25 +80,31 @@ def sync_table(conn_info, stream, state, desired_columns, md_map):
             with conn.cursor(cursor_factory=psycopg2.extras.DictCursor, name='pipelinewise') as cur:
                 cur.itersize = post_db.CURSOR_ITER_SIZE
                 LOGGER.info("Beginning new incremental replication sync %s", stream_version)
+                max_query_rows = conn_info['max_query_rows']
+                limit = " LIMIT {}".format(max_query_rows) if max_query_rows else ""
                 if replication_key_value:
                     select_sql = """SELECT {}
                                     FROM {}
                                     WHERE {} >= '{}'::{}
-                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
+                                    ORDER BY {} ASC
+                                    {}""".format(','.join(escaped_columns),
                                                               post_db.fully_qualified_table_name(schema_name,
                                                                                                  stream['table_name']),
                                                               post_db.prepare_columns_sql(replication_key),
                                                               replication_key_value,
                                                               replication_key_sql_datatype,
-                                                              post_db.prepare_columns_sql(replication_key))
+                                                              post_db.prepare_columns_sql(replication_key),
+                                                              limit)
                 else:
                     #if not replication_key_value
                     select_sql = """SELECT {}
                                     FROM {}
-                                    ORDER BY {} ASC""".format(','.join(escaped_columns),
+                                    ORDER BY {}
+                                    ASC {}""".format(','.join(escaped_columns),
                                                               post_db.fully_qualified_table_name(schema_name,
                                                                                                  stream['table_name']),
-                                                              post_db.prepare_columns_sql(replication_key))
+                                                              post_db.prepare_columns_sql(replication_key),
+                                                              limit)
 
                 LOGGER.info('select statement: %s with itersize %s', select_sql, cur.itersize)
                 cur.execute(select_sql)
